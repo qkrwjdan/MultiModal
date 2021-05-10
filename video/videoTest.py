@@ -4,7 +4,7 @@ import numpy as np
 import os
 import time
 
-master = pd.read_csv(os.path.join(os.getcwd(),'dataset','master','session1_master.csv'))
+master = pd.read_csv(os.path.join(os.getcwd(),'dataset','master','raw_session1.csv'))
 master = master[['Clip_Name','Use','Label','Emotion']]
 
 master_test = master[master['Use']=='test']
