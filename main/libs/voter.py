@@ -14,6 +14,17 @@ class Voter:
             self._score_board = {'Positive':0, 'Negative':0,'Neutral':0}
         else:
             self._score_board = {'Positive':0, 'Negative':0,'Neutral':0}
+
+        self.t = TextClassifier(session_nums=test_session_no,
+                                include_neu=self._include_neu)
+        self.t.load_model()
+
+        self.v = VideoClassifier(session_nums=test_session_no,
+                                 include_neu=self._include_neu)
+        self.v.load_model('models/video/np_model_3class')
+
+        # self.a = AudioClassifier()
+
         
     def scoring(self, pred_class, weight):
         self._score_board[pred_class] += weight
@@ -34,28 +45,23 @@ class Voter:
     def voting(self, test_id):
         # test_id = 'Ses01F_impro01_F012'
 
-        t = TextClassifier()
-        t.load_model(model_path='models/text/class3_model.h5', tokenizer_path='models/text/class3_tokenizer.pickle', le_path='models/text/class3_label_encoder.pickle')
-        text_predict = t.predict(test_id)
+        text_predict = self.t.predict(test_id)
 
-        audio_fname = f"{test_id}.wav"
-        print(audio_fname)
-        #audio_path = os.path.join('dataset', 'iemocap_audio', 'raw', audio_fname)
-        audio_path = os.path.join(os.getcwd(),'dataset\iemocap_audio\\raw', audio_fname)
-        print(audio_path)
-        a = AudioClassifier(audio_path)
-        a.load_model('models/audio/cnn_session1_2_3_test.h5')
-        audio_predict = a.predict()
+        # audio_fname = f"{test_id}.wav"
+        # print(audio_fname)
+        # #audio_path = os.path.join('dataset', 'iemocap_audio', 'raw', audio_fname)
+        # audio_path = os.path.join(os.getcwd(),'dataset\iemocap_audio\\raw', audio_fname)
+        # print(audio_path)
+        # a = AudioClassifier(audio_path)
+        # a.load_model('models/audio/cnn_session1_2_3_test.h5')
+        # audio_predict = a.predict()
 
-        v = VideoClassifier(test_id,session_nums=[1],include_neu=False)
-        v.preprocess_data()
-        v.load_model('models/video/3class_session1_2_3')
-        video_predict = v.predict()
-
-        print(text_predict, self._text_weight)
+        video_predict = self.v.predict(test_id)
+        print("Video : {video},Text : {text}".format(video=video_predict,text=text_predict))
+        
         self.scoring(text_predict, self._text_weight)
         self.scoring(video_predict, self._video_weight)
-        self.scoring(audio_predict, self._audio_weight)
+        # self.scoring(audio_predict, self._audio_weight)
 
         emotion = self.decide_emotion()
 
