@@ -12,13 +12,16 @@ from keras.models import Sequential
 from keras.layers import Embedding, Flatten, Dense
 # import nltk
 
-import pytorch
-from transformers import 
-
+import torch
+import torch.nn as nn
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+import transformers
+from transformers import RobertaModel, RobertaTokenizer
 
 
 from abc import *
-import librosa
+# import librosa
 from keras.models import load_model
     
 
@@ -46,6 +49,34 @@ class Classifier(metaclass=ABCMeta):
     def predict(self):
         pass
 
+class BERT_Arch(nn.Module):
+    
+    def __init__(self, bert):
+        super(BERT_Arch, self).__init__()
+        
+        self.bert = bert
+        
+        self.dropout = nn.Dropout(0.3)
+        self.relu = nn.ReLU()
+        self.fc1 = nn.Linear(768,512)
+        self.fc2 = nn.Linear(512,3)
+        self.softmax = nn.LogSoftmax(dim=1)
+        
+    def forward(self, sent_id, mask):
+        
+        ret = self.bert(sent_id, attention_mask = mask).pooler_output
+#         ret = self.bert(sent_id, attention_mask = mask)
+        
+#         print(ret)
+        
+        x = self.fc1(ret)
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.softmax(x)
+        
+#         print(x.size())
+        return x
 
 class TextClassifier(Classifier):
 
@@ -63,6 +94,14 @@ class TextClassifier(Classifier):
             TypeError: session_nums 파라미터는 반드시 리스트로 받아야 합니다.
             Exception: []
         """
+        if torch.cuda.is_available():
+            print(torch.cuda.get_device_name(0))
+            self.device = torch.device("cuda")
+        else: 
+            self.device = torch.device("cpu")
+
+        self.labelEncoder = {"Negative" : 1, "Neutral" : 2, "Positive" : 0}
+        self.labelDecoder = {0 : "Positive",1 : "Negative", 2:"Neutral"} 
 
         if not isinstance(session_nums, list):
             raise TypeError('session no must be list type')
@@ -73,14 +112,14 @@ class TextClassifier(Classifier):
         #     self.make_text_dataset(session_num, include_neu=include_neu)
 
         # base_dir = os.path.join('drive', 'My Drive', 'chatbot')
-        text_dir = os.path.join(base_dir, 'dataset',  'iemocap_text')
+        text_dir = os.path.join(base_dir, 'datasets',  'iemocap_text')
 
         if len(session_nums) == 1:
             if include_neu:
                 fname = f'session{session_nums[0]}_text_neu.csv'
             else:
                 fname = f'session{session_nums[0]}_text.csv'
-            self.text_dset = pd.read_csv(os.path.join(text_dir, f'session{session_nums[0]}_text.csv')) # 미리 전처리 해 놓은 데이터
+            self.text_dset = pd.read_csv(os.path.join(text_dir, f'session{session_nums[0]}_text.csv'))
         elif len(session_nums) > 1:
             if include_neu:
                 dir_list = [os.path.join(text_dir, f'session{no}_text_neu.csv') for no in session_nums]
@@ -99,49 +138,25 @@ class TextClassifier(Classifier):
         # nltk.download('popular')
         # nltk.download('stopwords')
 
-    def load_model(self, model_path='models/text_model.h5', tokenizer_path='models/tokenizer.pickle', le_path='models/le.pickle'):
+    def load_model(self,
+                base_model = "roberta-base",
+                model_path='models/text/emocap_3class_rbt.pt',
+                max_length = 30
+                ):
         """pre-train 된 모델을 불러옵니다.
         
         Keyword Arguments:
+            base_model {str} -- pre-trained model 
             model_path {str} -- 불러올 모델이 저장된 경로를 입력합니다. (default: {'models/text_model.h5'})
-            tokenizer_path {str} -- tokenizer를 불러올 경로를 입력합니다. (default: {'models/tokenizer.pickle'})
-            le_path {str} -- label_encoder를 불러올 결로를 입력합니다. (default: {'models/le.pickle'})
+        
         """
-        # reference : https://www.tensorflow.org/guide/keras/save_and_serialize
-        import pickle
+        self.max_length = max_length
 
-        self.model = keras.models.load_model(model_path)
-        with open(tokenizer_path, 'rb') as f:
-            self.tokenizer = pickle.load(f)
-        with open(le_path, 'rb') as f:
-            self.label_encoder = pickle.load(f)
-
-    def preprocess_X(self, texts, maxlen=100):
-        from nltk.corpus import stopwords
-        from nltk.tokenize import word_tokenize
-        from nltk.stem import PorterStemmer, LancasterStemmer
-        stop_words = set(stopwords.words('english'))
-        pst = PorterStemmer()
-        # 토큰화
-        tokens = []
-        for txt in texts:
-            token = word_tokenize(txt)
-            non_stopwords = [pst.stem(t) for t in token if not t in stop_words]
-            tokens.append(non_stopwords)
-        if self.tokenizer is None:
-            raise ValueError('tokenizer is not loaded')
-        tokenizer = self.tokenizer
-        sentences = tokenizer.texts_to_sequences(tokens)
-        X = pad_sequences(sentences, maxlen=maxlen)
-        return X
-
-    def preprocess_y(self, labels):
-        if self.label_encoder is None:
-            raise ValueError('label encoder is not loaded')
-        labels = self.label_encoder.transform(labels)
-        labels = to_categorical(labels)
-        y = np.asarray(labels)
-        return y
+        bert = RobertaModel.from_pretrained(base_model)
+        self.tokenizer = RobertaTokenizer.from_pretrained(base_model)
+        self.model = BERT_Arch(bert)
+        self.model.load_state_dict(torch.load(model_path))
+        self.model = self.model.to(self.device)
 
     def get_data(self, script_id):
         dset = self.text_dset
@@ -151,26 +166,32 @@ class TextClassifier(Classifier):
 
         return text, emotion
 
+    def preprocess(self, text):
+        
+        tokenized = self.tokenizer.batch_encode_plus(
+            text,
+            max_length = self.max_length,
+            pad_to_max_length = True,
+            truncation = True
+        )
+
+        seq = torch.tensor(tokenized['input_ids'])
+        mask = torch.tensor(tokenized['attention_mask'])
+        return (seq,mask)
+
+
     def predict(self, script_id):
-        """한 개의 script id에 대한 감정 예측을 진행합니다.
         
-        Arguments:
-            script_id {str} -- 예측할 스크립트 id를 입력합니다. (ex. )
-        
-        Returns:
-            str -- 예측된 클래스를 리턴합니다. 리턴 값은 ang, hap과 같은 문자열 타입입니다.
-        """
-        text, emotion = self.get_data(script_id)
-        X_test = self.preprocess_X(text)
-        X_test_arr = np.array(X_test)
-        print("test text : ", X_test)
-        y_pred = np.array(self.model.predict_classes(X_test_arr))
-        print("y_pred : ", y_pred)
-        y_pred_str = self.label_encoder.inverse_transform(y_pred)
-        print("역변환된 y_pred :" ,y_pred)
-        label_idx = {'Positive':0, 'Negative':1,'Neutral':2}
-        print("type : ", type(y_pred_str[0]))
-        return y_pred_str[0]
+        text, _ = self.get_data(script_id)
+        seq, mask = self.preprocess(text)
+
+        with torch.no_grad():
+            pred = self.model(seq.to(self.device),mask.to(self.device))
+            pred = pred.detach().cpu().numpy()
+
+        pred = np.argmax(pred,axis = 1)
+
+        return self.labelDecoder[pred[0]]
 
 
 class VideoClassifier(Classifier):
