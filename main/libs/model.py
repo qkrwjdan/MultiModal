@@ -21,21 +21,14 @@ import transformers
 from transformers import RobertaModel, RobertaTokenizer
 
 #video
-# import os 
 import tensorflow as tf
-# import keras
-# import pandas as pd
-# import numpy as np
-
-# from abc import *
-
 from keras import utils
 from skimage.io import imread
 from skimage.transform import resize
 
 
 from abc import *
-# import librosa
+import librosa
 from keras.models import load_model
     
 
@@ -302,8 +295,8 @@ class VideoClassifier(Classifier):
 
 
 class AudioClassifier(Classifier):
-    def __init__(self,audio):
-        self.wav=audio
+    def __init__(self,data_path):
+        self.data_path = data_path
 
     def load_model(self,path):
         self.model = load_model(path)
@@ -313,7 +306,7 @@ class AudioClassifier(Classifier):
         negative = 0
         neutral = 0
 
-        EMOTIONS = ['pos', 'neg', 'neu']
+        EMOTIONS = ['Positive', 'Negative', 'Neutral']
         for i in range(len(predictions)):
             positive += predictions[i][0]
             negative += predictions[i][1]
@@ -350,10 +343,10 @@ class AudioClassifier(Classifier):
         return np.array(features)
 
 
-    def predict(self):
+    def predict(self,script_id):
 
-        feature_x = self.extract_features_array(self.wav, bands=60, frames=41)
-
+        file_path = os.path.join(self.data_path,script_id+".wav")
+        feature_x = self.extract_features_array(file_path, bands=60, frames=41)
         predictions = self.model.predict(feature_x)
 
         # score(predictions)

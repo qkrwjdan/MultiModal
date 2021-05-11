@@ -1,13 +1,13 @@
 import os
-from libs.model import TextClassifier, VideoClassifier #, AudioClassifier
+from libs.model import TextClassifier, VideoClassifier , AudioClassifier
 
 class Voter:
 
-    def __init__(self, test_session_no=[1], include_neu=False, text_weight=0.71, video_weight=0.72, audio_weight=0.7):
+    def __init__(self, test_session_no=[1], include_neu=False, text_weight=0.3, video_weight=0.72, audio_weight=0.4):
         # weight : accuracy
         self._text_weight = text_weight
         self._video_weight = video_weight
-        self._audio_weight= audio_weight
+        self._audio_weight = audio_weight
         self._label_idx = {'Positive':0, 'Negative':1,'Neutral':2}
         self._include_neu = include_neu
         if include_neu:
@@ -23,7 +23,9 @@ class Voter:
                                  include_neu=self._include_neu)
         self.v.load_model('models/video/np_model_3class')
 
-        # self.a = AudioClassifier()
+        audio_path = os.path.join('datasets', 'iemocap_audio', 'raw')
+        self.a = AudioClassifier(audio_path)
+        self.a.load_model('models/audio/crnn_session1_5_class3.h5')
 
         
     def scoring(self, pred_class, weight):
@@ -46,22 +48,14 @@ class Voter:
         # test_id = 'Ses01F_impro01_F012'
 
         text_predict = self.t.predict(test_id)
-
-        # audio_fname = f"{test_id}.wav"
-        # print(audio_fname)
-        # #audio_path = os.path.join('dataset', 'iemocap_audio', 'raw', audio_fname)
-        # audio_path = os.path.join(os.getcwd(),'dataset\iemocap_audio\\raw', audio_fname)
-        # print(audio_path)
-        # a = AudioClassifier(audio_path)
-        # a.load_model('models/audio/cnn_session1_2_3_test.h5')
-        # audio_predict = a.predict()
-
+        audio_predict = self.a.predict(test_id)
         video_predict = self.v.predict(test_id)
-        print("Video : {video},Text : {text}".format(video=video_predict,text=text_predict))
+
+        print("Video : {video},Text : {text},Audio : {audio}".format(video=video_predict,text=text_predict,audio=audio_predict))
         
         self.scoring(text_predict, self._text_weight)
         self.scoring(video_predict, self._video_weight)
-        # self.scoring(audio_predict, self._audio_weight)
+        self.scoring(audio_predict, self._audio_weight)
 
         emotion = self.decide_emotion()
 
