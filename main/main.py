@@ -3,61 +3,59 @@ from libs.voter import Voter
 
 import os
 import time
-
-
-master = pd.read_csv(os.path.join(os.getcwd(),'datasets','master','raw_session1.csv'))
-master = master[['Clip_Name','Use','Label','Emotion']]
-
-master_test = master[master['Use']=='test']
-
-ans = 0
-all = 0
-
-print(master_test)
+import csv
 
 v = Voter()
 acc_list = []
 time_list = []
 
-for i in range(10):
-    start = time.time()
+test_dataset_path = os.path.join(os.getcwd(),"datasets","master","testDataset")
+
+dataset_list = os.listdir(test_dataset_path)
+
+dataset_list.sort()
+
+acc_list = []
+time_list = []
+
+for path in dataset_list:
+    test_dataset = os.path.join(test_dataset_path, path)
+    df = pd.read_csv(test_dataset)
+    print("="*10,test_dataset,"="*10)
+
     ans = 0
     all = 0
-    for j in range(len(master_test["Clip_Name"])):
-        if j > i * 20 and j < (i+1) * 20:
-            continue
-        
-        test_id = master_test["Clip_Name"].values[j]
-        label = master_test["Label"].values[j]
 
-        print(test_id)
-        
+    start = time.time()
+
+    for test_id, label in zip(df["Clip_Name"],df["Label"]):
+        print("="*20)
+        print("Data ID : ",test_id)
+        print("Actual : ",label)
+
         pred = v.voting(test_id)
-        print("voting : ",pred)
-        if pred == label:
+        print("Multimodal Output : ",pred)
+        print("="*20)
+
+
+        if label == pred:
             ans += 1
         all += 1
     
-    acc = ans/all * 100
+    acc = ans / all * 100
+    print("Total Accuracy : ",acc)
     acc_list.append(acc)
-    print(i,") - ACC : ",ans / all * 100)
+    
     time_list.append(time.time() - start)
     print("time : ",time.time() - start)
-    break
 
-print(acc_list)
-print(time_list)
+print("="*30)
+print("Total Accuracy = ",sum(acc_list) / len(acc_list))
+print("="*30)
 
-# start = time.time()
+with open("result.csv","w") as f:
+    wr = csv.writer(f)
+    wr.writerow(["ID","ACC","TIME"])
 
-# for test_id,label in zip(master_test["Clip_Name"],master_test["Label"]):
-#     print(test_id)
-
-#     pred = v.voting(test_id)
-#     print("voting : ",pred)
-#     if pred == label:
-#         ans += 1
-#     all += 1
-
-# print("ACC : ",ans / all * 100)
-# print("time : ",time.time() - start)
+    for i in range(len(acc_list)):
+        wr.writerow([i+1,acc_list[i],time_list[i]])

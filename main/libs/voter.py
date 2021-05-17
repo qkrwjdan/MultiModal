@@ -33,7 +33,7 @@ class Voter:
 
     def decide_emotion(self):
         emotion = max(self._score_board, key=self._score_board.get)
-        print(self._score_board)
+        # print(self._score_board)
         self.reset_score_board()
         return emotion
     
@@ -51,7 +51,7 @@ class Voter:
         audio_predict = self.a.predict(test_id)
         video_predict = self.v.predict(test_id)
 
-        print("Video : {video},Text : {text},Audio : {audio}".format(video=video_predict,text=text_predict,audio=audio_predict))
+        # print("Video : {video},Text : {text},Audio : {audio}".format(video=video_predict,text=text_predict,audio=audio_predict))
         
         self.scoring(text_predict, self._text_weight)
         self.scoring(video_predict, self._video_weight)

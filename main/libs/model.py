@@ -174,7 +174,7 @@ class TextClassifier(Classifier):
             text = "empty"
 
         emotion = row['Label']
-        print("text : {text}".format(text=text))
+        # print("text : {text}".format(text=text))
         return text, emotion
 
     def preprocess(self, text):
